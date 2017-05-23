@@ -1,0 +1,195 @@
+/** cp1.c
+ *     version 1 of cp - uses read and write with tunable buffer size
+ *
+ *     usage: cp1 src dest buffersize
+ */
+#include <stdlib.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <stdlib.h>  // for strtol
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <string.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <libgen.h>
+
+
+#define COPYMODE 0644
+
+void errExit(char*, char*);
+
+int main(int argC, char* argV[])
+{
+
+	/*Check args*/
+    	if( argC<3 ){
+        	fprintf( stderr, "usage: %s source destination\n", argV[0]);
+        	exit(1);
+    	}
+
+	struct stat stats;
+	stat(argV[argC-1], &stats);
+
+	char ans;
+	int i;
+	if (strcmp(argV[1], "-i") == 0) {
+
+		/*Check of multiple arguments is trying to be
+		written to a single file */
+		if ((argC>4) && (!S_ISDIR(stats.st_mode))) {
+			fprintf( stderr, "Cannot copy multiple files to one\n");
+			exit(1);
+		}
+
+		
+
+		for (i=2; i<argC-1; i++) {
+			
+			char a[BUFSIZ];
+
+			printf("copy $%s$? (y/n [n])\n", argV[i]);
+			fgets(a,2,stdin);
+			if ((strcmp(a, "y") == 0) || (strcmp(a, "Y") == 0)) {
+				copyFile(argV[i], argV[argC-1]);
+				//getchar();
+				//getchar();
+			//} else {
+				//fprintf(stderr, "Exiting program\n");
+				//exit(1);
+				//break;
+			}
+			getchar();
+			//getchar();
+			//getchar();
+
+			/*
+			printf("copy $%s$? (y/n [n])\n", argV[i]);
+			scanf(" %c", &ans);
+			//ans = getch();
+			if (ans == 'y' || ans == 'Y') {
+				copyFile(argV[i], argV[argC-1]);
+			} else {
+				fprintf(stderr, "Exiting program\n");
+				exit(1);
+			}
+			*/
+		}
+
+	} else {
+
+		/*Check of multiple arguments is trying to be
+		written to a single file */
+		if ((argC>3) && (!S_ISDIR(stats.st_mode))) {
+			fprintf( stderr, "Cannot copy multiple files to one\n");
+			exit(1);
+		}
+
+    		for (i=1; i<argC-1; i++) {
+			copyFile(argV[i], argV[argC-1]);
+    		}
+	}
+
+    	return 0;
+}
+
+
+void copyFile(char* fromFile, char* toPath) {
+
+        int srcFd;
+        int dstFd;
+        int charCnt;
+
+        char* buff = "10";
+        int buffersize = strtol(buff, NULL, 10);
+        char buf[buffersize];
+
+        /*Open the files*/
+        srcFd= open(fromFile,O_RDONLY);
+        if( srcFd==-1 ) {
+                errExit("Cannot open ", fromFile);
+        }
+
+        /* Check if output path is dir or file */
+
+        struct stat stats;
+        stat(toPath, &stats);
+
+
+	if (S_ISDIR(stats.st_mode)) {
+		
+		// If output path is a dir
+                // ---------------------------------------------------------
+
+		              
+		char* base;		
+		base = basename(fromFile);
+		size_t path_len = strlen(toPath) + strlen(fromFile) + 1;
+                char* path_arr = (char*) malloc(path_len);
+                strcat(strcat(strcat(path_arr, toPath), "/"), base);
+
+                dstFd = creat(path_arr, COPYMODE);
+                if (dstFd == -1) {
+                        errExit( "Cannot create file ", fromFile);
+                }
+
+                /* Copy the data*/
+                while ( (charCnt = read(srcFd, buf, buffersize)) > 0 ) {
+                        if ( write(dstFd, buf, charCnt ) != charCnt ) {
+                                errExit( "Write error to ", path_arr);
+                        }
+                }
+
+                if ( charCnt == -1 ) {
+                        errExit("Write error to ", path_arr);
+                }
+
+                /* Close files */
+                if ( close(srcFd) == -1 || close(dstFd) == -1 ) {
+                        errExit( "Error closing files", "");
+                }
+
+                free(path_arr);
+
+
+	} else {
+
+		// If output path is a file
+                // ----------------------------------------------------
+
+                dstFd= creat(toPath,COPYMODE);
+                if( dstFd==-1 ) {
+                        errExit( "Cannot create ", toPath);
+                }
+
+                /*Copy the data*/
+                while( (charCnt= read(srcFd,buf,buffersize)) > 0 ) {
+                        if( write(dstFd,buf,charCnt ) != charCnt ) {
+                                errExit("Write error to ", toPath);
+                        }
+                }
+
+                if( charCnt==-1 ) {
+                        errExit("Read error from ", fromFile);
+                }
+
+                /*Close files*/
+                if ( close(srcFd) == -1 || close(dstFd) == -1 ) {
+                        errExit("Error closing files","");
+                }
+
+
+	}
+
+}
+
+void errExit(char* s1, char* s2)
+{
+    fprintf(stderr,"Error: %s ", s1);
+    perror(s2);
+    exit(1);
+}
+
+
